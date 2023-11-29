@@ -5,9 +5,13 @@
 #define DATA_PIN 5
 CRGB leds[NUM_LEDS];
 
+unsigned long previousMillis = 0;           // Stores last time LEDs were updated
+int count = 0;                              // Stores count for incrementing up to the NUM_LEDs
+int loops = 0;
+
 // Replace with your network credentials
-const char* ssid     = "Your SSID";
-const char* password = "Your Password";
+const char* ssid     = "42Wolfsburg_FabLab";
+const char* password = "0nly5ky15theL1m17";
 
 // Set web server port number to 80
 WiFiServer server(80);
@@ -17,33 +21,25 @@ String header;
 
 // Auxiliar variables to store the current output state
 String outputState[64];
-
-//String output4State = "off";
+String animationState = "off";
 
 // Assign output variables to GPIO pins
 const int output5 = 5;
-//const int output4 = 4;
 
 // Current time
 unsigned long currentTime = millis();
 // Previous time
 unsigned long previousTime = 0; 
 // Define timeout time in milliseconds (example: 2000ms = 2s)
-const long timeoutTime = 5000;
+const long timeoutTime = 25000;
 
 void setup() {
   Serial.begin(115200);
   int i = 0;
   while (i < 64)
-  {
     outputState[i++] = "off";
-  }
-  // Initialize the output variables as outputs
   pinMode(output5, OUTPUT);
-  //pinMode(output4, OUTPUT);
-  // Set outputs to LOW
   digitalWrite(output5, LOW);
- // digitalWrite(output4, LOW);
 
   // Connect to Wi-Fi network with SSID and password
   Serial.print("Connecting to ");
@@ -51,7 +47,7 @@ void setup() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
+    Serial.println(".");
   }
   // Print local IP address and start web server
   Serial.println("");
@@ -62,7 +58,6 @@ void setup() {
   FastLED.addLeds<WS2812,DATA_PIN,RGB>(leds,NUM_LEDS);
   FastLED.setBrightness(50);
   
-
   server.begin();
 }
 
@@ -91,31 +86,30 @@ void loop(){
             client.println("Connection: close");
             client.println();
             
-            // turns the GPIOs on and off
-            for (int i = 0; i < 64; i++)
-            {
-                if (header.indexOf("GET /" + String(i) + "/on") >= 0) {
-                Serial.println("GPIO" + String(i) + "on");
-                outputState[i] = "on";
-                //digitalWrite(output5, HIGH);
-                } else if (header.indexOf("GET /" + String(i) + "/off") >= 0) {
-                  Serial.println("GPIO" + String(i) + "off");
-                  outputState[i] = "off";
-                  //digitalWrite(output5, LOW);
+
+            // turn animation on and off
+            if (header.indexOf("GET /animate/on") >= 0) {
+                Serial.println("animate: on");
+                animationState = "on";
+                } else if (header.indexOf("GET /animate/off") >= 0) {
+                  Serial.println("animate: off");
+                  animationState = "off";
                   }
+
+            // turns the LEDs on and off
+            if (animationState == "off")
+            {
+              for (int i = 0; i < 64; i++)
+              {
+                  if (header.indexOf("GET /" + String(i) + "/on") >= 0) {
+                  Serial.println("GPIO" + String(i) + "on");
+                  outputState[i] = "on";
+                  } else if (header.indexOf("GET /" + String(i) + "/off") >= 0) {
+                    Serial.println("GPIO" + String(i) + "off");
+                    outputState[i] = "off";
+                    }
+              }
             }
-            
-            
-            // Display the HTML web page
-            //client.println("<!DOCTYPE html><html>");
-            //client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            //client.println("<link rel=\"icon\" href=\"data:,\">");
-            // CSS to style the on/off buttons 
-            // Feel free to change the background-color and font-size attributes to fit your preferences
-            //client.println("<style>html { font-family: Helvetica; margin: 10px auto; text-align: center;}");
-            //client.println(".button { display: inline-block; background-color: #195B6A; border: none; color: white; padding: 16px 40px;");
-            //client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
-            //client.println(".button2 { display: inline-block; background-color: #77878A;}</style></head>");
             
             // Display the HTML web page
             client.println("<!DOCTYPE html><html lang=\"en\">");
@@ -133,7 +127,7 @@ void loop(){
             client.println("</head>");
 
             client.println("<body>");
-            client.println("  <h1>PUSH THE BUTTON</h1>");
+            client.println("  <h1>THE MACHINE THAT GOES PING</h1>");
 
             // Wrap the buttons in a container
             client.println("  <div class=\"button-container\">");
@@ -156,22 +150,44 @@ void loop(){
             }
             client.println("  </div>");
 
+            //place animation button
+            if (animationState == "off") {
+                client.println("      <div><a href=\"/animate/on\"><button class=\"button\">Animation: ON</button></a></div>");
+              } else {
+                client.println("      <div><a href=\"/animate/off\"><button class=\"button\">Animation: OFF</button></a></div>");
+              }
             client.println("</body></html>");
             
             // The HTTP response ends with another blank line
             client.println();
 
-            for (int i = 0; i < 64; i++)
+            // change color of LEDs according to status
+            if (animationState == "off")
             {
-              if (outputState[i] == "on")
-                leds[i]=CRGB::Blue;
-              else if (outputState[i] == "off")
+              for (int i = 0; i < 64; i++)
+              {
+                if (outputState[i] == "on")
+                  leds[i]=CRGB::Blue;
+                else if (outputState[i] == "off")
+                  leds[i]=CRGB::Black;
+                FastLED.show();
+              }
+            }
+            else
+            {
+              while (loops < 640)
+              {
+                shootingStarAnimation(255, 255, 255, random(10, 60), random(5, 40), random(2000, 8000), 1);
+                loops++;
+              }
+              loops = 0;
+              for (int i = 0; i < 64; i++)
+              {
                 leds[i]=CRGB::Black;
-              FastLED.show();
+                FastLED.show();
+              }
             }
             
-            // Break out of the while loop
-            break;
           } else { // if you got a newline, then clear currentLine
             currentLine = "";
           }
@@ -186,7 +202,28 @@ void loop(){
     client.stop();
     Serial.println("Client disconnected.");
     Serial.println("");
-
-   
   }
+}
+
+void shootingStarAnimation(int red, int green, int blue, int tail_length, int delay_duration, int interval, int direction){
+  unsigned long currentMillis = millis();   // Get the time
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;         // Save the last time the LEDs were updated
+    count = 0;                              // Reset the count to 0 after each interval
+  }
+  if (direction == -1) {        // Reverse direction option for LEDs
+    if (count < NUM_LEDS) {
+      leds[NUM_LEDS - (count % (NUM_LEDS+1))].setRGB(red, green, blue);    // Set LEDs with the color value
+      count++;
+    }
+  }
+  else {
+    if (count < NUM_LEDS) {     // Forward direction option for LEDs
+      leds[count % (NUM_LEDS+1)].setRGB(red, green, blue);    // Set LEDs with the color value
+      count++;
+    }
+  }
+  fadeToBlackBy(leds, NUM_LEDS, tail_length);                 // Fade the tail LEDs to black
+  FastLED.show();
+  delay(delay_duration);                                      // Delay to set the speed of the animation
 }
